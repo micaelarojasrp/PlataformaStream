@@ -1,0 +1,558 @@
+class Nodo:
+    # Clase nodo para la lista enlazada
+    def __init__(self, dato):
+        self.dato = dato
+        self.siguiente = None
+
+class ListaEnlazada:
+    # Clase para manejar nodos
+    def __init__(self):
+        self.cabeza = None
+
+    def agregar(self, dato):
+        # Agrega un nuevo nodo al final de la lista
+        if not isinstance(dato, (Usuario, Contenido)):
+            raise TypeError("El dato debe ser una instancia de Usuario o Contenido")
+        nuevo_nodo = Nodo(dato)
+        if not self.cabeza:
+            self.cabeza = nuevo_nodo
+        else:
+            actual = self.cabeza
+            while actual.siguiente:
+                actual = actual.siguiente
+            actual.siguiente = nuevo_nodo
+
+    def mostrar(self):
+        # Muestra los datos de la lista enlazada
+        actual = self.cabeza
+        while actual:
+            if isinstance(actual.dato, Contenido):  # Para mostrar el historial
+                print(f"- {actual.dato.titulo} ({actual.dato.duracion} min, {actual.dato.genero})")
+            elif isinstance(actual.dato, Usuario):  # Para mostrar usuarios
+                print(f"- Usuario: {actual.dato.nombre}, Edad: {actual.dato.edad}")
+            actual = actual.siguiente
+
+class Usuario:
+    # Clase Usuario
+    def __init__(self, nombre, edad, preferencias):
+        if not isinstance(nombre, str):
+            raise TypeError("El nombre debe ser una cadena de texto")
+        if not isinstance(edad, int) or edad < 0:
+            raise ValueError("La edad debe ser un entero no negativo")
+        if not isinstance(preferencias, list) or not all(isinstance(p, str) for p in preferencias):
+            raise TypeError("Las preferencias deben ser una lista de cadenas de texto")
+        self.nombre = nombre
+        self.edad = edad
+        self.preferencias = preferencias  # Gustos del usuario
+        self.historial = ListaEnlazada()  # Historial de contenido visto como lista enlazada
+
+    def visto(self, contenido):
+        # Agrega Contenido al historial del usuario
+        if not isinstance(contenido, Contenido):
+            raise TypeError("El contenido debe ser una instancia de Contenido")
+        self.historial.agregar(contenido)
+        print(f"{self.nombre} ha visto '{contenido.titulo}'.")
+
+    def mostrar_historial(self):
+        # Muestra el historial de visualización del usuario.
+        print(f"Historial de {self.nombre}:")
+        self.historial.mostrar()
+
+class Contenido:
+    # Clase Contenido con título, duración, género y popularidad.
+    def __init__(self, titulo, duracion, genero, popularidad):
+        if not isinstance(titulo, str):
+            raise TypeError("El título debe ser una cadena de texto")
+        if not isinstance(duracion, int) or duracion < 0:
+            raise ValueError("La duración debe ser un entero no negativo")
+        if not isinstance(genero, str):
+            raise TypeError("El género debe ser una cadena de texto")
+        if not isinstance(popularidad, (int, float)) or popularidad < 0:
+            raise ValueError("La popularidad debe ser un número no negativo")
+        self.titulo = titulo
+        self.duracion = duracion
+        self.genero = genero
+        self.popularidad = popularidad
+
+    def mostrar_info(self):
+        # Muestra la información del contenido.
+        print(f"{self.titulo} | Duración: {self.duracion} min | Género: {self.genero} | Popularidad: {self.popularidad}")
+
+class Plataforma:
+    # Clase Plataforma para gestionar usuarios y contenido.
+    def __init__(self):
+        self.usuarios = ListaEnlazada()  # Lista de usuarios en la plataforma como lista enlazada
+        self.contenidos = ListaEnlazada()  # Lista de contenido disponible como lista enlazada
+        self.grafo_contenido = Grafo()  # Grafo para representar las relaciones entre contenidos
+        self.catalogo = None  # Árbol general para el catálogo
+
+    def agregar_usuario(self, usuario):
+        # Agrega un usuario a la plataforma
+        if not isinstance(usuario, Usuario):
+            raise TypeError("El usuario debe ser una instancia de Usuario")
+        self.usuarios.agregar(usuario)
+        print(f"Usuario '{usuario.nombre}' añadido.")
+
+    def agregar_contenido(self, contenido):
+        # Agrega contenido a la plataforma
+        if not isinstance(contenido, Contenido):
+            raise TypeError("El contenido debe ser una instancia de Contenido")
+        # Verificar si el contenido ya existe antes de agregarlo
+        if contenido in self.obtener_contenidos():
+            print(f"El contenido '{contenido.titulo}' ya existe en la plataforma.")
+            return
+        # Agregar al catálogo de contenidos
+        self.contenidos.agregar(contenido)
+        # Agregar al grafo
+        self.grafo_contenido.agregar_nodo(contenido)
+        # Conectar con otros contenidos del mismo género
+        for otro_contenido in self.obtener_contenidos():
+            if otro_contenido is not contenido and otro_contenido.genero == contenido.genero:
+                # Asegurarse de que la arista no exista antes de agregarla
+                if not self.grafo_contenido.existe_arista(contenido, otro_contenido):
+                    self.grafo_contenido.agregar_arista(contenido, otro_contenido)
+
+        print(f"Contenido '{contenido.titulo}' añadido correctamente.")
+
+    def obtener_contenidos(self):
+        # Funcion de ayuda para agregar_contenido
+        contenidos = []
+        actual = self.contenidos.cabeza
+        while actual:
+            contenidos.append(actual.dato)
+            actual = actual.siguiente
+        return contenidos
+
+    def buscar_recomendaciones(self, nodo_contenido, usuario, recomendaciones):
+        # Busca recomendaciones para el usuario de forma recursiva.
+        if not nodo_contenido:
+            return recomendaciones
+
+        contenido_actual = nodo_contenido.dato
+        if contenido_actual.genero in usuario.preferencias and not self.contenido_visto(usuario.historial.cabeza, contenido_actual.titulo):
+            recomendaciones.append(contenido_actual)
+
+        return self.buscar_recomendaciones(nodo_contenido.siguiente, usuario, recomendaciones)
+
+    def contenido_visto(self, nodo_historial, titulo):
+        # Verifica si el usuario ha visto el contenido de forma recursiva
+        if not nodo_historial:
+            return False
+        if isinstance(nodo_historial.dato, Contenido) and nodo_historial.dato.titulo == titulo:
+            return True
+        return self.contenido_visto(nodo_historial.siguiente, titulo)
+
+    def recomendaciones(self, usuario, tipo_recorrido="DFS"):
+        # Muestra recomendaciones para el usuario
+        if not isinstance(usuario, Usuario):
+            raise TypeError("El usuario debe ser una instancia de Usuario")
+        if tipo_recorrido not in ("DFS", "BFS"):
+            raise ValueError("El tipo de recorrido debe ser 'DFS' o 'BFS'")
+
+        recomendaciones = []
+        visitados = set()
+        contenido_visto = [nodo.dato for nodo in usuario.historial.cabeza]  # Obtener contenido visto del historial
+        for contenido in contenido_visto:
+            if tipo_recorrido == "DFS":
+                recomendaciones = self.grafo_contenido.DFS(contenido, visitados.copy(), contenido_visto, recomendaciones)
+            elif tipo_recorrido == "BFS":
+                recomendaciones = self.grafo_contenido.BFS(contenido, contenido_visto, recomendaciones)
+        return recomendaciones  # Devolver solo los nodos recomendados
+
+
+    def agregar_serie(self, nombre_serie):
+        # Agrega una serie al catálogo (árbol general)
+        if not self.catalogo:
+            self.catalogo = NodoArbolGeneral(nombre_serie)
+        else:
+            # Lógica para agregar la serie al árbol (puedes definirla según tus necesidades)
+            pass  
+
+    def agregar_temporada(self, nombre_serie, num_temporada):
+        # Agrega una temporada a una serie en el catálogo
+        serie = self.buscar_nodo_arbol(self.catalogo, nombre_serie)
+        if serie:
+            serie.hijos.append(NodoArbolGeneral(f"Temporada {num_temporada}"))
+
+    def agregar_episodio(self, nombre_serie, num_temporada, num_episodio, nombre_episodio):
+        # Agrega un episodio a una temporada en el catálogo
+        serie = self.buscar_nodo_arbol(self.catalogo, nombre_serie)
+        if serie:
+            temporada = self.buscar_nodo_arbol(serie, f"Temporada {num_temporada}")
+            if temporada:
+                temporada.hijos.append(NodoArbolGeneral(nombre_episodio, num_episodio))
+
+    def buscar_nodo_arbol(self, nodo, nombre):
+        # Busca un nodo en el árbol por su nombre
+        if nodo.nombre == nombre:
+            return nodo
+        for hijo in nodo.hijos:
+            resultado = self.buscar_nodo_arbol(hijo, nombre)
+            if resultado:
+                return resultado
+        return None
+
+    def mostrar_catalogo(self):
+        # Muestra el catálogo de series en forma de árbol
+        if not self.catalogo:
+            print("El catálogo está vacío.")
+            return
+
+        def recorrer_arbol(nodo, nivel=0):
+            # Función recursiva para recorrer el árbol
+            if nodo.episodio is not None:  # Es un episodio
+                print("  " * nivel + f"- Episodio {nodo.episodio}: {nodo.nombre}")
+            else:
+                print("  " * nivel + f"- {nodo.nombre}")
+            for hijo in nodo.hijos:
+                recorrer_arbol(hijo, nivel + 1)
+
+        recorrer_arbol(self.catalogo)
+
+class NodoArbol:
+    def __init__(self, contenido):
+        self.contenido = contenido  # 'contenido' sera un objeto con el atributo 'popularidad'
+        self.izquierda = None
+        self.derecha = None
+
+class ArbolBinario:
+    def __init__(self):
+        self.raiz = None
+
+    def insertar(self, nuevo_contenido):
+        if self.raiz is None:
+            self.raiz = NodoArbol(nuevo_contenido)
+        else:
+            self._insertar_recursivo(self.raiz, nuevo_contenido)
+
+    def _insertar_recursivo(self, nodo, nuevo_contenido):
+        if nuevo_contenido.popularidad < nodo.contenido.popularidad:
+            if nodo.izquierda is None:
+                nodo.izquierda = NodoArbol(nuevo_contenido)
+            else:
+                self._insertar_recursivo(nodo.izquierda, nuevo_contenido)
+        else:
+            if nodo.derecha is None:
+                nodo.derecha = NodoArbol(nuevo_contenido)
+            else:
+                self._insertar_recursivo(nodo.derecha, nuevo_contenido)
+
+class NodoArbolGeneral:  # Cambiado el nombre para evitar conflicto
+    # Arbol general de las series
+    def __init__(self, nombre, episodio=None):
+        self.nombre = nombre
+        self.hijos = []
+        self.episodio = episodio  # Número de episodio si es un nodo de episodio
+
+def agregar_serie(arbol, nombre_serie):
+    # Agrega una serie
+    if not arbol:
+        return NodoArbolGeneral(nombre_serie)
+    else:
+        arbol.hijos.append(NodoArbolGeneral(nombre_serie))
+        return arbol
+
+def agregar_temporada(arbol, nombre_serie, num_temporada):
+    # Agrega una temporada
+    serie = buscar_nodo(arbol, nombre_serie)
+    if serie:
+        serie.hijos.append(NodoArbolGeneral(f"Temporada {num_temporada}"))
+
+def agregar_episodio(arbol, nombre_serie, num_temporada, num_episodio, nombre_episodio):
+    # Agrega un episodio
+    serie = buscar_nodo(arbol, nombre_serie)
+    if serie:
+        temporada = buscar_nodo(serie, f"Temporada {num_temporada}")
+        if temporada:
+            temporada.hijos.append(NodoArbolGeneral(nombre_episodio, num_episodio))
+
+def buscar_nodo(nodo, nombre):
+    # Busca un nodo por su nombre
+    if nodo.nombre == nombre:
+        return nodo
+    for hijo in nodo.hijos:
+        resultado = buscar_nodo(hijo, nombre)
+        if resultado:
+            return resultado
+    return None
+
+def mostrar_catalogo(arbol):
+    # Muestra el catalogo de series
+    if not arbol:
+        print("El catálogo está vacío.")
+        return
+
+    def recorrer_arbol(nodo, nivel=0):
+        # Funcion recursiva para recorrer arbol
+        if nodo.episodio is not None:  # Es un episodio
+            print("  " * nivel + f"- Episodio {nodo.episodio}: {nodo.nombre}")
+        else:
+            print("  " * nivel + f"- {nodo.nombre}")
+        for hijo in nodo.hijos:
+            recorrer_arbol(hijo, nivel + 1)
+
+    recorrer_arbol(arbol)
+
+class NodoCola:  # Cambiado el nombre para evitar conflicto
+    def __init__(self, contenido):
+        self.contenido = contenido
+        self.siguiente = None
+
+class ContenidoCola:  # Cambiado el nombre para evitar conflicto
+    def __init__(self, titulo, duracion, genero, popularidad):
+        self.titulo = titulo
+        self.duracion = duracion
+        self.genero = genero
+        self.popularidad = popularidad  # Valor numerico para indicar popularidad
+
+    def __repr__(self):
+        return f"{self.titulo} (Duracion: {self.duracion}), (Genero: {self.genero}), (Popularidad: {self.popularidad})"
+
+class ColaPrioridad:
+    def __init__(self):
+        self.cabeza = None
+
+    def agregar_con_prioridad(self, contenido):
+        nuevo_nodo = NodoCola(contenido)
+        # Si la cola està vacia o el nuevo contenido tiene mayor prioridad que la cabeza actual
+        if not self.cabeza or contenido.popularidad > self.cabeza.contenido.popularidad:
+            nuevo_nodo.siguiente = self.cabeza
+            self.cabeza = nuevo_nodo
+        else:
+            actual = self.cabeza
+            # Recorrer la lista enlazada para insertar en la posiciòn correcta
+            while actual.siguiente and contenido.popularidad <= actual.siguiente.contenido.popularidad:
+                actual = actual.siguiente
+            nuevo_nodo.siguiente = actual.siguiente
+            actual.siguiente = nuevo_nodo
+
+    def mostrar_cola(self):
+        actual = self.cabeza
+        while actual:
+            print(actual.contenido)
+            actual = actual.siguiente
+
+class HeapBinaria:
+    def __init__(self):
+        self.heap = [0]  # Inicializamos con un elemento para simplificar cálculos de índices
+        self.tamaño = 0
+
+    def insertar(self, contenido):
+        self.heap.append(contenido)  # Agrega el contenido al final
+        self.tamaño += 1
+        self.heapify_up(len(self.heap) - 1)  # Ajusta hacia arriba desde la última posición
+
+    def heapify_up(self, index):
+        while index > 1:  # Mientras no esté en la raíz
+            padre = index // 2
+            if self.heap[index].popularidad > self.heap[padre].popularidad:
+                # Si el nodo actual es mayor que su padre, los intercambiamos
+                self.heap[index], self.heap[padre] = self.heap[padre], self.heap[index]
+            index = padre  # Actualiza el índice al del padre
+
+    def extraer_max(self):
+        if self.tamaño == 0:
+            raise IndexError("El heap está vacío")
+        maximo = self.heap[1]  # El elemento máximo está en la raíz
+        self.heap[1] = self.heap.pop()  # Mueve el último elemento a la raíz
+        self.tamaño -= 1
+        self.heapify_down(1)  # Ajusta hacia abajo desde la raíz
+        return maximo
+
+    def heapify_down(self, index):
+        while 2 * index <= self.tamaño:  # Mientras tenga al menos un hijo
+            hijo_mayor = self._hijo_mayor(index)
+            if self.heap[index].popularidad < self.heap[hijo_mayor].popularidad:
+                # Si el nodo actual es menor que el hijo mayor, intercambiamos
+                self.heap[index], self.heap[hijo_mayor] = self.heap[hijo_mayor], self.heap[index]
+            index = hijo_mayor  # Actualiza el índice al del hijo mayor
+
+    def _hijo_mayor(self, index):
+        # Retorna el índice del hijo mayor
+        if 2 * index + 1 > self.tamaño:  # Si solo tiene un hijo (hijo izquierdo)
+            return 2 * index
+        # Compara los dos hijos y devuelve el mayor
+        if self.heap[2 * index].popularidad > self.heap[2 * index + 1].popularidad:
+            return 2 * index
+        return 2 * index + 1
+
+    def mostrar_heap(self):
+        for i in range(1, len(self.heap)):
+            print(f"{self.heap[i].titulo} - Popularidad: {self.heap[i].popularidad}")
+
+
+class Grafo:
+    def __init__(self):
+        self.grafo = {}  # Diccionario para almacenar el grafo
+
+    def agregar_nodo(self, nodo):
+        if nodo not in self.grafo:
+            self.grafo[nodo] = []
+
+    def agregar_arista(self, nodo1, nodo2):
+        if nodo1 not in self.grafo:
+            self.grafo[nodo1] = []
+        if nodo2 not in self.grafo:
+            self.grafo[nodo2] = []
+        if nodo2 not in self.grafo[nodo1]:  # Evitar aristas duplicadas
+            self.grafo[nodo1].append(nodo2)
+        if nodo1 not in self.grafo[nodo2]:  # Evitar aristas duplicadas
+            self.grafo[nodo2].append(nodo1)
+    def existe_arista(self, nodo1, nodo2):
+        return nodo2 in self.aristas.get(nodo1, [])
+
+    def obtener_vecinos(self, nodo):
+        return self.grafo.get(nodo, [])
+
+    def recomendacion(self, usuario, contenido_visto):
+        recomendaciones = []
+        for contenido in contenido_visto:
+            for vecino in self.obtener_vecinos(contenido):
+                if vecino not in contenido_visto and vecino not in recomendaciones:
+                    recomendaciones.append(vecino)
+        return recomendaciones  # Devolver solo los nodos recomendados
+
+    def DFS(self, nodo_inicial, visitados, contenido_visto, recomendaciones):
+        # Realiza un recorrido DFS en el grafo para encontrar recomendaciones.
+        visitados.add(nodo_inicial)
+        for vecino in self.obtener_vecinos(nodo_inicial):
+            if vecino not in visitados and vecino not in contenido_visto:
+                recomendaciones.append(vecino)
+                self.DFS(vecino, visitados, contenido_visto, recomendaciones)
+        return recomendaciones
+
+    def BFS(self, nodo_inicial, contenido_visto, recomendaciones):
+        # Recorrido BFS para recomendaciones
+        visitados = set([nodo_inicial])
+        cola = [nodo_inicial]
+        while cola:
+            nodo = cola.pop(0)
+            for vecino in self.obtener_vecinos(nodo):
+                if vecino not in visitados and vecino not in contenido_visto:
+                    recomendaciones.append(vecino)
+                    visitados.add(vecino)
+                    cola.append(vecino)
+        return recomendaciones
+
+    def ordenamiento_topologico(self):
+        # Implementa el ordenamiento topológico para gestionar la carga de contenido
+        grafo = self.grafo.copy()
+        grado_entrada = {}
+        for nodo in grafo:
+            grado_entrada[nodo] = 0
+        for nodo in grafo:
+            for vecino in grafo[nodo]:
+                grado_entrada[vecino] += 1
+
+        cola = [nodo for nodo in grafo if grado_entrada[nodo] == 0]
+        resultado = []
+        while cola:
+            nodo = cola.pop(0)
+            resultado.append(nodo)
+            for vecino in grafo[nodo]:
+                grado_entrada[vecino] -= 1
+        cola = [nodo for nodo in grafo if grado_entrada[nodo] == 0]
+        resultado = []
+        if len(resultado) != len(grafo):
+            raise ValueError("El grafo contiene ciclos. No se puede realizar el ordenamiento topológico.")
+        return resultado
+
+    def dijkstra(self, origen, destino, tiempo_disponible):
+        # Implementa el algoritmo de Dijkstra para encontrar la mejor secuencia de reproducción
+        distancias = {nodo: float('inf') for nodo in self.grafo}
+        distancias[origen] = 0
+        visitados = set()
+        anterior = {}
+
+        while len(visitados) < len(self.grafo):
+            nodo_actual = min((nodo for nodo in self.grafo if nodo not in visitados), key=lambda nodo: distancias[nodo], default=None)
+            if nodo_actual is None:
+                break
+            visitados.add(nodo_actual)
+
+            for vecino in self.grafo[nodo_actual]:
+                nueva_distancia = distancias[nodo_actual] + vecino.duracion  # Usar la duración como peso
+                if nueva_distancia < distancias[vecino] and nueva_distancia <= tiempo_disponible:
+                    distancias[vecino] = nueva_distancia
+                    anterior[vecino] = nodo_actual
+
+        # Reconstruir el camino
+        camino = []
+        nodo = destino
+        while nodo in anterior:
+            camino.append(nodo)
+            nodo = anterior[nodo]
+        if camino:
+            camino.append(origen)
+            camino.reverse()
+        return camino
+    
+    
+#######EJEMPLO DE USO CODIGO COMPLETO
+
+# --- Listas Enlazadas ---
+lista_usuarios = ListaEnlazada()
+usuario1 = Usuario("Juan", 30, ["Drama", "Acción"])
+usuario2 = Usuario("Ana", 25, ["Comedia", "Romance"])
+lista_usuarios.agregar(usuario1)
+lista_usuarios.agregar(usuario2)
+print("Lista de usuarios:")
+lista_usuarios.mostrar()  # Output: - Usuario: Juan, Edad: 30 \n - Usuario: Ana, Edad: 25
+
+# --- Usuarios y Contenido ---
+contenido1 = Contenido("Cadena perpetua", 142, "Drama", 9.3)
+usuario1.visto(contenido1)  # Output: Juan ha visto 'Cadena perpetua'.
+usuario1.mostrar_historial()  # Output: Historial de Juan: \n - Cadena perpetua (142 min, Drama)
+
+# --- Plataforma ---
+plataforma = Plataforma()
+plataforma.agregar_usuario(usuario1)  # Output: Usuario 'Juan' añadido.
+plataforma.agregar_contenido(contenido1)  # Output: Contenido 'Cadena perpetua' añadido.
+
+# --- Árbol Binario ---
+arbol_binario = ArbolBinario()
+arbol_binario.insertar(Contenido("Película 2", 90, "Acción", 7.5))
+arbol_binario.insertar(Contenido("Película 1", 120, "Acción", 8.0))
+
+# --- Árbol General ---
+arbol_general = NodoArbolGeneral("Breaking Bad")
+agregar_temporada(arbol_general, "Breaking Bad", 1)
+agregar_episodio(arbol_general, "Breaking Bad", 1, 1, "Piloto")
+mostrar_catalogo(arbol_general)  # Output: - Breaking Bad \n   - Temporada 1 \n     - Episodio 1: Piloto
+
+# --- Cola de Prioridad ---
+cola_prioridad = ColaPrioridad()
+cola_prioridad.agregar_con_prioridad(Contenido("Película 3", 100, "Drama", 8.5))
+cola_prioridad.agregar_con_prioridad(Contenido("Película 4", 110, "Comedia", 9.0))
+print("Cola de Prioridad:")
+cola_prioridad.mostrar_cola()  # Output: Película 4 (Duracion: 110), (Genero: Comedia), (Popularidad: 9.0) \n Película 3 (Duracion: 100), (Genero: Drama), (Popularidad: 8.5)
+
+# --- Heap Binaria ---
+heap = HeapBinaria()
+contenido1 = Contenido("Video1", 10, "Acción", 5)
+contenido2 = Contenido("Video2", 20, "Drama", 15)
+contenido3 = Contenido("Video3", 15, "Comedia", 8)
+
+heap.insertar(contenido1)
+heap.insertar(contenido2)
+heap.insertar(contenido3)
+
+heap.mostrar_heap()
+#Maxima popularidad
+maximo = heap.extraer_max()
+print(f"Contenido más popular: {maximo.titulo} con popularidad {maximo.popularidad}")
+heap.mostrar_heap()
+
+
+# --- Grafo ---
+grafo = Grafo()
+grafo.agregar_arista(Contenido("Película 7", 120, "Drama", 8.0), Contenido("Película 8", 90, "Drama", 7.5))
+grafo.agregar_arista(Contenido("Película 8", 90, "Drama", 7.5), Contenido("Película 9", 100, "Drama", 8.2))
+
+# --- Recorridos en Grafo ---
+contenido_visto = [Contenido("Película 7", 120, "Drama", 8.0)]
+recomendaciones_dfs = grafo.DFS(contenido_visto[0], set(), contenido_visto, [])
+print("Recomendaciones DFS:", recomendaciones_dfs)  # Output: [Película 8 (Duracion: 90), (Genero: Drama), (Popularidad: 7.5), Película 9 (Duracion: 100), (Genero: Drama), (Popularidad: 8.2)]
+
+recomendaciones_bfs = grafo.BFS(contenido_visto[0], contenido_visto, [])
+print("Recomendaciones BFS:", recomendaciones_bfs)  # Output: [Película 8 (Duracion: 90), (Genero: Drama), (Popularidad: 7.5), Película 9 (Duracion: 100), (Genero: Drama), (Popularidad: 8.2)]
